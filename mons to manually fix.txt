@@ -1,0 +1,6 @@
+wind sylph 548
+vero ???
+theomars 1064 -> 639
+
+eleanor "awakens_from": {"url": "https://swarfarm.com/api/bestiary/1036", "pk": 1036, "name": "Unicorn", "element": "Light"}
+diana "awakens_from": {"url": "https://swarfarm.com/api/bestiary/1035", "pk": 1035, "name": "Unicorn", "element": "Wind"}
