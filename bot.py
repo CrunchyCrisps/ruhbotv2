@@ -29,10 +29,20 @@ logging.basicConfig(level=logging.INFO)
 async def checkHive():
     req = requests.get('https://withhive.com/api/help/notice_list/1')
     response = req.json()
+
+    with open('/home/pi/Bot/ruhbotv2/notices.txt') as file:
+        old_notices = file.readlines()
+
+    old_notices = [x.strip() for x in old_notices]
+    
     for notice in response['result']:
         if notice['GameName'] == 'Summoners War' and notice['NoticeId'] not in old_notices:
-            result = '**New Notice: {} ({})**\nLink: https://withhive.com/help/notice_view/{}'.format(notice['Title'],notice['StartTime_Ymd'],notice['NoticeId'])
-            old_notices.append(notice['NoticeId'])
+            result = 'New Notice: {} ({})\nLink: https://withhive.com/help/notice_view/{}'.format(notice['Title'],notice['StartTime_Ymd'],notice['NoticeId'])
+
+            with open('/home/pi/Bot/ruhbotv2/notices.txt', 'a') as file2:
+                file2.write('\n')
+                file2.write(notice['NoticeId'])
+            
             for guild in bot.guilds:
                 channel = bot.get_guild(guild.id).system_channel
                 if channel is not None:
