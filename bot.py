@@ -20,7 +20,7 @@ from utility import sliceDetails, multiplyString, checkRuneList, endingChecker, 
 
 description = 'Discord Bot for Summoners War and Twitch.'
 bot = commands.Bot(command_prefix='!', description=description)
-conn = sqlite3.connect('C:\\Users\\Raffael\\Documents\\ruhBot\\users.db')
+conn = sqlite3.connect('/home/pi/Bot/ruhbotv2/users.db')
 db = conn.cursor()
 old_notices = []
 sched = AsyncIOScheduler()
@@ -64,31 +64,27 @@ async def mon(ctx, *monster):
     monster_fmt = ' '.join(monster).title()
     result = ''
     if any(x in monster_fmt for x in ['Wind', 'Water', 'Fire', 'Dark', 'Light']):
-        #tmp_path = '/home/pi/Documents/ruhbot/monsters/{}.json'.format(monster_fmt)
-        tmp_path = 'C:\\Users\\Raffael\\Documents\\ruhBot\\monsters\\{}.json'.format(monster_fmt)
+        tmp_path = '/home/pi/Bot/ruhbotv2/monsters/{}.json'.format(monster_fmt)
         if os.path.isfile(tmp_path):
             with open(tmp_path) as data_file_tmp:
                 data_tmp = json.load(data_file_tmp)
             monster_fmt = data_tmp['awakens_to']['name']
 
-    #path = '/home/pi/Documents/ruhbot/monsters/{}.json'.format(monster_fmt)
-    path = 'C:\\Users\\Raffael\\Documents\\ruhBot\\monsters\\{}.json'.format(monster_fmt)
+    path = '/home/pi/Bot/ruhbotv2/monsters/{}.json'.format(monster_fmt)    
     if os.path.isfile(path):
         result = getMonsterInfo(monster, path)
     else:
         found = False
-        #mon_dir = '/home/pi/Documents/ruhbot/monsters'
-        mon_dir = 'C:\\Users\\Raffael\\Documents\\ruhBot\\monsters'
+        mon_dir = '/home/pi/Bot/ruhbotv2/monsters'
         for file in os.listdir(mon_dir):
             if monster_fmt.lower() in file.lower() and found is False:
                 if any(x in monster_fmt for x in ['Wind', 'Water', 'Fire', 'Dark', 'Light']):
-                    #with open('/home/pi/Documents/ruhbot/monsters/{}'.format(file)) as temp_file:
-                    with open('C:\\Users\\Raffael\\Documents\\ruhBot\\monsters\\{}'.format(file)) as temp_file:
+                    with open('/home/pi/Bot/ruhbotv2/monsters/{}'.format(file)) as temp_file:
                         temp_data = json.load(temp_file)
                     awakened_name = temp_data['awakens_to']['name']
-                    result = getMonsterInfo(awakened_name, '{}\\{}.json'.format(mon_dir, awakened_name))
+                    result = getMonsterInfo(awakened_name, '{}/{}.json'.format(mon_dir, awakened_name))
                 else:
-                    result = getMonsterInfo(file[:-5], '{}\\{}'.format(mon_dir, file))
+                    result = getMonsterInfo(file[:-5], '{}/{}'.format(mon_dir, file))
                 found = True
         if result == '':
             result = 'Monster not found. Try again.'
@@ -106,8 +102,7 @@ async def my(ctx, *monster: str):
     else:
         swarfarm_id = result[1]
         monster_fmt = ' '.join(monster).title()
-        #path = '/home/pi/Documents/ruhbot/monsters/{}.json'.format(monster_fmt)
-        path = 'C:\\Users\\Raffael\\Documents\\ruhBot\\monsters\\{}.json'.format(monster_fmt)
+        path = '/home/pi/Bot/ruhbotv2/monsters/{}.json'.format(monster_fmt)
 
         if os.path.isfile(path):
             # load file
@@ -191,9 +186,8 @@ async def skill(ctx, skill: int, *monster: str):
     monster = ' '.join(monster).title()
     skill_nr = skill-1
 
-    #path = '/home/pi/Documents/ruhbot/monsters/{}.json'.format(monster)
-    path = 'C:\\Users\\Raffael\\Documents\\ruhBot\\monsters\\{}.json'.format(monster)
-
+    path = '/home/pi/Documents/ruhbot/monsters/{}.json'.format(monster)
+    
     if os.path.isfile(path):
         # load file
         with open(path) as data_file:
