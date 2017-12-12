@@ -196,7 +196,7 @@ async def skill(ctx, skill: int, *monster: str):
     monster = ' '.join(monster).title()
     skill_nr = skill-1
 
-    path = '/home/pi/Documents/ruhbot/monsters/{}.json'.format(monster)
+    path = '/home/pi/Bot/ruhbotv2/monsters/{}.json'.format(monster)
     
     if os.path.isfile(path):
         # load file
