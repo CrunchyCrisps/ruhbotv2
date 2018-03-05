@@ -1,22 +1,16 @@
 import ast
 import json
-import time
 import discord
-import asyncio
-import urlfetch
 import requests
 import sqlite3
-import datetime
 import os.path
 import random
 import config
 import logging
 from io import BytesIO
-from PIL import Image
-from decimal import Decimal
 from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from utility import sliceDetails, multiplyString, checkRuneList, endingChecker, getMonsterInfo
+from utility import multiplyString, checkRuneList, getMonsterInfo
 
 description = 'Discord Bot for Summoners War and Twitch.'
 bot = commands.Bot(command_prefix='!', description=description)
@@ -52,7 +46,7 @@ async def checkHive():
 async def on_ready():
     print("I'm charged and ready!")
     print('-------------------------')
-    sched.add_job(checkHive, 'interval', hours=3)
+    sched.add_job(checkHive, 'interval', hours=1)
     sched.start()
 
 @bot.command(help='Links your Discord account to your Swarfarm account.')
