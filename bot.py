@@ -5,12 +5,13 @@ import requests
 import sqlite3
 import os.path
 import random
+import asyncio
 import config
 import logging
 from io import BytesIO
 from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from utility import multiplyString, checkRuneList, getMonsterInfo
+from utility import multiplyString, checkRuneList, getMonsterInfo, download_song, get_youtube_url
 
 description = 'Discord Bot for Summoners War and Twitch.'
 bot = commands.Bot(command_prefix='!', description=description)
@@ -19,6 +20,38 @@ db = conn.cursor()
 old_notices = []
 sched = AsyncIOScheduler()
 logging.basicConfig(level=logging.INFO)
+is_playing = False
+vc = None
+volume = 0.4
+song_queue = []
+
+def song_done():
+    global is_playing
+    is_playing = False
+    if len(song_queue) > 0:
+        next_song()
+
+def queue_song(user_id, song_path, title):
+    song_queue.append([user_id, song_path, title])
+
+def next_song():
+    next = song_queue[0][1]
+    title = song_queue[0][2]
+    del song_queue[0]
+    coro = play_song(next, title)
+    fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
+    try:
+        fut.result()
+    except:
+        pass
+
+async def play_song(song_path, title):
+    global is_playing
+    is_playing = True
+    vc.play(discord.FFmpegPCMAudio(song_path), after=lambda e: song_done())
+    vc.source = discord.PCMVolumeTransformer(vc.source)
+    vc.source.volume = volume
+    await bot.change_presence(activity=discord.Game(name=title))
 
 async def checkHive():
     req = requests.get('https://withhive.com/api/help/notice_list/1')
@@ -295,5 +328,40 @@ async def preview(ctx, stream: str):
         embed = discord.Embed()
         embed.set_image(url="attachment://preview.jpg")
         await ctx.send(file=file, embed=embed)
+
+@bot.command(help='Joins voice channel')
+async def join(ctx):
+    global vc
+    if vc is None:
+        voice_channel = bot.get_guild(ctx.guild.id).voice_channels[0]
+        vc = await voice_channel.connect()
+
+@bot.command(help='Plays the songs in the queue.')
+async def sr(ctx, *song):
+    discord_id = ctx.message.author.id
+    song = ' '.join(song)
+    if 'www.youtube.com' in song:
+        title = download_song(song).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"', "'").replace('?', '')
+    else:
+        url = get_youtube_url(song)
+        title = download_song(url).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"', "'").replace('?', '')
+    path = '{}\\{}.mp3'.format(config.SONG_PATH, title)
+    if is_playing:
+        queue_song(user_id=discord_id, song_path=path, title=title)
+        await ctx.send('Added {} to the queue'.format(title))
+    else:
+        await play_song(song_path=path, title=title)
+
+@bot.command(help='Skips current song.')
+async def skip(ctx):
+    if vc is not None and vc.is_playing():
+        vc.stop()
+
+@bot.command(help='Shows current queue')
+async def queue(ctx):
+    for i, entry in enumerate(song_queue):
+        user = ctx.guild.get_member(entry[0]).display_name
+        song = entry[2]
+        await ctx.send('#{} {} - Requested by {}'.format(i+1, song, user))
 
 bot.run(config.DISCORD_TOKEN)

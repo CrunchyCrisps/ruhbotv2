@@ -1,0 +1,14 @@
+config.py
+notices.txt
+users.db
+Playlists/*
+brawlai.py
+notifications.py
+monsters/*
+Python/*
+__pycache__/
+*.pyc
+dj.py
+archive.txt
+.idea
+Downloads/

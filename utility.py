@@ -1,8 +1,22 @@
+from __future__ import unicode_literals
 import config
 import json
+import requests
 import os.path
-import datetime
+import time
 import ast
+import youtube_dl
+
+ydl_opts = {
+        'format': 'bestaudio/best',
+        'download_archive': 'C:\\Users\\Raffael\\Documents\\Discord Bot\\archive.txt',
+        'outtmpl': 'C:\\Users\\Raffael\\Documents\\Discord Bot\\Downloads\\%(title)s.%(ext)s',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+    }
 
 def sliceDetails(command):
     skill = command[7:8]
@@ -15,12 +29,6 @@ def multiplyString(word, amount):
     for x in range(0, amount):
         result += word
     return result
-
-def chat(socket, message):
-    socket.send("PRIVMSG #{} :{}\r\n".format(config.CHANNEL, message).encode('utf-8'))
-
-def whisper(socket, username, message):
-    socket.send('PRIVMSG #jtv :/w {} {}\r\n'.format(username, message).encode('utf_8'))
 
 def checkRuneList(rune_sets):
     final_sets = []
@@ -58,17 +66,6 @@ def endingChecker(amount,word):
     else:
         result = word + 's'
     return result
-
-def checkCooldown(cds,command,user,limit):
-    for cooldown in cds:
-        if user == cooldown[0] and command == cooldown[1]:
-            now = time.time()
-            then = cooldown[2]
-            difference = now - then
-            if difference < limit:
-                return true
-            else:
-                return false
 
 def getMonsterInfo(monster,path):
     if os.path.isfile(path):
@@ -138,3 +135,17 @@ def getMonsterInfo(monster,path):
             awaken_from = ' {}'.format(data['awakens_from']['name'])
         result = '**{0}** ({1}{2}) {3}\n{4}\nLeader Skill: {5}\nAwakening Bonus: {6}\n{7}'.format(name,element,awaken_from,star_string,stats,leader,awaken,skill_result)
         return result
+
+def download_song(link):
+    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        info_dict = ydl.extract_info(link, download=True)
+        video_title = info_dict.get('title', None)
+    return video_title
+
+def get_youtube_url(title):
+    url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&key={}&q={}&maxResults=1'.format(config.YT_API_TOKEN,title)
+    r = requests.get(url,)
+    response = r.json()
+    youtube_id = response['items'][0]['id']['videoId']
+    youtube_url = 'https://www.youtube.com/watch?v={}'.format(youtube_id)
+    return youtube_url
