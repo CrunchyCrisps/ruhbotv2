@@ -8,6 +8,7 @@ import random
 import asyncio
 import config
 import logging
+from collections import Counter
 from io import BytesIO
 from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -15,16 +16,31 @@ from utility import multiplyString, checkRuneList, getMonsterInfo, download_song
 
 description = 'Discord Bot for Summoners War and Twitch.'
 bot = commands.Bot(command_prefix='!', description=description)
+logging.basicConfig(level=logging.INFO)
+
+# database for swarfarm connection
 conn = sqlite3.connect('/home/pi/Bot/ruhbotv2/users.db')
 db = conn.cursor()
+
+# checking withhive notices
 old_notices = []
 sched = AsyncIOScheduler()
-logging.basicConfig(level=logging.INFO)
-is_playing = False
+
+# DJ stuff
 vc = None
 volume = 0.4
 song_queue = []
+is_playing = False
 current_song = None
+limit_requests = False
+
+def check_requests(id):
+    c = Counter(req[0] for req in song_queue)
+    current_requests = c[id]
+    if current_requests < limit_requests:
+        return True
+    else:
+        return False
 
 def song_done():
     global is_playing
@@ -341,18 +357,19 @@ async def join(ctx):
 @bot.command(help='Plays the songs in the queue.')
 async def sr(ctx, *song):
     discord_id = ctx.message.author.id
-    song = ' '.join(song)
-    if 'www.youtube.com' in song:
-        title = download_song(song).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"', "'").replace('?', '')
-    else:
-        url = get_youtube_url(song)
-        title = download_song(url).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"', "'").replace('?', '')
-    path = '{}/{}.mp3'.format(config.SONG_PATH, title)
-    if is_playing:
-        queue_song(user_id=discord_id, song_path=path, title=title)
-        await ctx.send('Added {} to the queue'.format(title))
-    else:
-        await play_song(song_path=path, title=title)
+    if limit_requests is None or check_requests(discord_id):
+        song = ' '.join(song)
+        if 'www.youtube.com' in song:
+            title = download_song(song).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"', "'").replace('?', '')
+        else:
+            url = get_youtube_url(song)
+            title = download_song(url).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"', "'").replace('?', '')
+        path = '{}/{}.mp3'.format(config.SONG_PATH, title)
+        if is_playing:
+            queue_song(user_id=discord_id, song_path=path, title=title)
+            await ctx.send('Added {} to the queue'.format(title))
+        else:
+            await play_song(song_path=path, title=title)
 
 @bot.command(help='Skips current song.')
 async def skip(ctx):
@@ -362,6 +379,7 @@ async def skip(ctx):
 
 @bot.command(help='Shows current queue')
 async def queue(ctx):
+    await ctx.send('There are currently {} songs in queue.'.format(len(song_queue)))
     for i, entry in enumerate(song_queue):
         user = ctx.guild.get_member(entry[0]).display_name
         song = entry[2]
