@@ -24,6 +24,7 @@ is_playing = False
 vc = None
 volume = 0.4
 song_queue = []
+current_song = None
 
 def song_done():
     global is_playing
@@ -46,9 +47,10 @@ def next_song():
         pass
 
 async def play_song(song_path, title):
-    global is_playing
+    global is_playing, current_song
     is_playing = True
     vc.play(discord.FFmpegPCMAudio(song_path), after=lambda e: song_done())
+    current_song = title
     vc.source = discord.PCMVolumeTransformer(vc.source)
     vc.source.volume = volume
     await bot.change_presence(activity=discord.Game(name=title))
@@ -345,7 +347,7 @@ async def sr(ctx, *song):
     else:
         url = get_youtube_url(song)
         title = download_song(url).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"', "'").replace('?', '')
-    path = '{}\\{}.mp3'.format(config.SONG_PATH, title)
+    path = '{}/{}.mp3'.format(config.SONG_PATH, title)
     if is_playing:
         queue_song(user_id=discord_id, song_path=path, title=title)
         await ctx.send('Added {} to the queue'.format(title))
@@ -355,6 +357,7 @@ async def sr(ctx, *song):
 @bot.command(help='Skips current song.')
 async def skip(ctx):
     if vc is not None and vc.is_playing():
+        await ctx.send('Skipped {}'.format(current_song))
         vc.stop()
 
 @bot.command(help='Shows current queue')
@@ -363,5 +366,23 @@ async def queue(ctx):
         user = ctx.guild.get_member(entry[0]).display_name
         song = entry[2]
         await ctx.send('#{} {} - Requested by {}'.format(i+1, song, user))
+
+@bot.command(help='Removes your last requested song from queue.')
+async def wrongsong(ctx):
+    global song_queue
+    discord_id = ctx.message.author.id
+    q = song_queue.reverse()
+    match = False
+    matched_request = None
+    for request in q:
+        if match is False and request[0] == discord_id:
+            match = True
+            matched_request = request
+            q.remove(request)
+    song_queue = q.reverse()
+    if matched_request is not None:
+        await ctx.send('Removed {} from the queue'.format(matched_request[2]))
+    else:
+        await ctx.send("You didn't request any of the songs that are currently in queue")
 
 bot.run(config.DISCORD_TOKEN)

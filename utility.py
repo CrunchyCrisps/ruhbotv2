@@ -9,8 +9,8 @@ import youtube_dl
 
 ydl_opts = {
         'format': 'bestaudio/best',
-        'download_archive': 'C:\\Users\\Raffael\\Documents\\Discord Bot\\archive.txt',
-        'outtmpl': 'C:\\Users\\Raffael\\Documents\\Discord Bot\\Downloads\\%(title)s.%(ext)s',
+        'download_archive': '/home/pi/Bot/ruhbotv2/archive.txt',
+        'outtmpl': '/home/pi/Bot/ruhbotv2/Downloads/%(title)s.%(ext)s',
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
