@@ -27,50 +27,68 @@ old_notices = []
 sched = AsyncIOScheduler()
 
 # DJ stuff
-vc = None
-volume = 0.4
-sr_channel = None
-song_queue = []
-is_playing = False
-current_song = None
-limit_requests = False
+djs = {}
 
-def check_requests(id):
-    c = Counter(req[0] for req in song_queue)
+
+class DJ(object):
+    def __init__(self, _voice_channel, _request_channel):
+        self.voice_channel = None
+        self.request_channel = None
+        self.voice_client = None
+        self.queue = []
+        self.current_song = ''
+        self.volume = 0.4
+        self.limit_requests = False
+        self.playing = False
+
+    async def connect_voice(self):
+        self.voice_client = await self.voice_channel.connect()
+
+    async def play(self, path):
+        self.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e: song_done(self))
+
+    async def adjust_volume(self, vol):
+        self.voice_client.source = discord.PCMVolumeTransformer(self.voice_client.source)
+        self.voice_client.source.volume = vol
+
+def check_requests(id, dj):
+    c = Counter(req[0] for req in dj.queue)
     current_requests = c[id]
-    if current_requests < limit_requests:
+    if current_requests < dj.limit_requests:
         return True
     else:
         return False
 
-def song_done():
-    global is_playing
-    is_playing = False
-    if len(song_queue) > 0:
-        next_song()
 
-def queue_song(user_id, song_path, title):
-    song_queue.append([user_id, song_path, title])
+def song_done(dj):
+    dj.playing = False
+    if len(dj.queue) > 0:
+        next_song(dj)
 
-def next_song():
-    next = song_queue[0]
-    del song_queue[0]
-    coro = play_song(next)
+
+def queue_song(user_id, song_path, title, dj):
+    dj.queue.append([user_id, song_path, title])
+
+
+def next_song(dj):
+    next = dj.queue[0]
+    del dj.queue[0]
+    coro = play_song(next, dj)
     fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
     try:
         fut.result()
     except:
         pass
 
-async def play_song(request_info):
-    global is_playing, current_song
-    is_playing = True
-    vc.play(discord.FFmpegPCMAudio(request_info[1]), after=lambda e: song_done())
-    current_song = request_info[2]
-    vc.source = discord.PCMVolumeTransformer(vc.source)
-    vc.source.volume = volume
-    await bot.change_presence(activity=discord.Game(name=current_song))
-    await sr_channel.send('Now playing {} - Requested by {}'.format(current_song, sr_channel.guild.get_member(request_info[0].display_name)))
+
+async def play_song(request_info, dj):
+    dj.playing = True
+    dj.play(request_info[1])
+    dj.current_song = request_info[2]
+    dj.adjust_volume(dj.volume)
+    await dj.request_channel.send('Now playing {} - Requested by {}'.format(dj.current_song, dj.request_channel.guild.get_member(
+        request_info[0].display_name)))
+
 
 async def checkHive():
     req = requests.get('https://withhive.com/api/help/notice_list/1')
@@ -80,19 +98,23 @@ async def checkHive():
         old_notices = file.readlines()
 
     old_notices = [x.strip() for x in old_notices]
-    
+
     for notice in response['result']:
         if notice['GameName'] == 'Summoners War' and notice['NoticeId'] not in old_notices:
-            result = 'New Notice: {} ({})\nLink: https://withhive.com/help/notice_view/{}'.format(notice['Title'],notice['StartTime_Ymd'],notice['NoticeId'])
+            result = 'New Notice: {} ({})\nLink: https://withhive.com/help/notice_view/{}'.format(notice['Title'],
+                                                                                                  notice[
+                                                                                                      'StartTime_Ymd'],
+                                                                                                  notice['NoticeId'])
 
             with open('/home/pi/Bot/ruhbotv2/notices.txt', 'a') as file2:
                 file2.write('\n')
                 file2.write(notice['NoticeId'])
-            
+
             for guild in bot.guilds:
                 channel = bot.get_guild(guild.id).system_channel
                 if channel is not None:
                     await channel.send(result)
+
 
 @bot.event
 async def on_ready():
@@ -100,6 +122,7 @@ async def on_ready():
     print('-------------------------')
     sched.add_job(checkHive, 'interval', hours=1)
     sched.start()
+
 
 @bot.command(help='Links your Discord account to your Swarfarm account.')
 async def set(ctx, name):
@@ -115,6 +138,7 @@ async def set(ctx, name):
     conn.commit()
     await ctx.send(msg)
 
+
 @bot.command(help='Returns stats and skills of specified monster.')
 async def mon(ctx, *monster):
     monster_fmt = ' '.join(monster).title()
@@ -126,7 +150,7 @@ async def mon(ctx, *monster):
                 data_tmp = json.load(data_file_tmp)
             monster_fmt = data_tmp['awakens_to']['name']
 
-    path = '/home/pi/Bot/ruhbotv2/monsters/{}.json'.format(monster_fmt)    
+    path = '/home/pi/Bot/ruhbotv2/monsters/{}.json'.format(monster_fmt)
     if os.path.isfile(path):
         result = getMonsterInfo(monster, path)
     else:
@@ -145,6 +169,7 @@ async def mon(ctx, *monster):
         if result == '':
             result = 'Monster not found. Try again.'
     await ctx.send(result)
+
 
 @bot.command(help='Returns stats of your monster.')
 async def my(ctx, *monster: str):
@@ -168,7 +193,7 @@ async def my(ctx, *monster: str):
             monster_id = data['pk']
             stat_url = 'https://swarfarm.com/api/v2/profiles/{}/monsters/'.format(swarfarm_id)
             r1 = requests.get(stat_url, headers={'Accept': 'application/json',
-                                        'Content-Type': 'application/json', })
+                                                 'Content-Type': 'application/json', })
             response = r1.json()
             result = ''
             for monster in response['results']:
@@ -177,7 +202,7 @@ async def my(ctx, *monster: str):
 
                     url2 = 'https://swarfarm.com/api/instance/{}'.format(instance_id)
                     r2 = requests.get(url2, headers={'Accept': 'application/json',
-                                                'Content-Type': 'application/json', })
+                                                     'Content-Type': 'application/json', })
                     monster_info = r2.json()
 
                     if monster_info['monster']['is_awakened'] is True:
@@ -214,8 +239,9 @@ async def my(ctx, *monster: str):
                             elif rune['slot'] == 6:
                                 slot_six = rune['get_main_stat_rune_display']
                         slot_list = []
-                        for slot in [slot_two,slot_four,slot_six]:
-                            slot_abbreviation = slot.replace('Accuracy', 'ACC').replace('CRI Dmg', 'CDMG').replace('CRI Rate', 'CR')
+                        for slot in [slot_two, slot_four, slot_six]:
+                            slot_abbreviation = slot.replace('Accuracy', 'ACC').replace('CRI Dmg', 'CDMG').replace(
+                                'CRI Rate', 'CR')
                             if slot_abbreviation == '':
                                 slot_list.append('?')
                             else:
@@ -237,13 +263,14 @@ async def my(ctx, *monster: str):
         else:
             await ctx.send('Monster not found.')
 
+
 @bot.command(help='Returns all information about the specified skill of a monster.')
 async def skill(ctx, skill: int, *monster: str):
     monster = ' '.join(monster).title()
-    skill_nr = skill-1
+    skill_nr = skill - 1
 
     path = '/home/pi/Bot/ruhbotv2/monsters/{}.json'.format(monster)
-    
+
     if os.path.isfile(path):
         # load file
         with open(path) as data_file:
@@ -256,16 +283,16 @@ async def skill(ctx, skill: int, *monster: str):
         else:
             cooltime = data['skills'][skill_nr]['cooltime']
         hits = data['skills'][skill_nr]['hits']
-        skillups = data['skills'][skill_nr]['max_level']-1
+        skillups = data['skills'][skill_nr]['max_level'] - 1
         if skillups == 0:
             progress = '-'
         else:
             progress_raw = data['skills'][skill_nr]['level_progress_description']
             still_raw = progress_raw.replace('\r\n', ', ')
             if still_raw[-1] == '\n':
-                progress = still_raw.replace('\n',', ')[:-2]
+                progress = still_raw.replace('\n', ', ')[:-2]
             else:
-                progress = still_raw.replace('\n',', ')
+                progress = still_raw.replace('\n', ', ')
         if data['skills'][skill_nr]['multiplier_formula_raw'] == '[]':
             multiplier = '-'
         else:
@@ -282,8 +309,9 @@ async def skill(ctx, skill: int, *monster: str):
                          'TARGET_CUR_HP_RATE': 'Enemy HP %', 'ATTACK_TOT_HP': 'MAX HP', 'ATTACK_SPEED': 'SPD',
                          'TARGET_SPEED': 'Enemy SPD'}
 
-            for word in ['ATTACK_LOSS_HP','TARGET_TOT_HP','TARGET_CUR_HP_RATE','ATTACK_TOT_HP','ATTACK_SPEED','TARGET_SPEED']:
-                multiplier = multiplier.replace(word,mult_dict[word])
+            for word in ['ATTACK_LOSS_HP', 'TARGET_TOT_HP', 'TARGET_CUR_HP_RATE', 'ATTACK_TOT_HP', 'ATTACK_SPEED',
+                         'TARGET_SPEED']:
+                multiplier = multiplier.replace(word, mult_dict[word])
 
         effect_list = []
         for effect in data['skills'][skill_nr]['skill_effect']:
@@ -298,13 +326,16 @@ async def skill(ctx, skill: int, *monster: str):
 
     await ctx.send(result)
 
+
 @bot.command(help="Chooses one of the specified options. Use ' or ' as delimiter.")
 async def choose(ctx):
     options = ctx.message.content[8:].split(' or ')
     choice = random.choice(options)
     await ctx.send(choice)
 
-@bot.command(help="Chooses one of the specified options while showing the elimination process. Use ' or ' as delimiter.")
+
+@bot.command(
+    help="Chooses one of the specified options while showing the elimination process. Use ' or ' as delimiter.")
 async def eliminate(ctx):
     options = ctx.message.content[11:].split(' or ')
     while (len(options) > 1):
@@ -312,6 +343,7 @@ async def eliminate(ctx):
         options.remove(choice)
         result = ' '.join(options)
         await ctx.send(result)
+
 
 @bot.command(help="Returns the current top 5 Summoners War streams.")
 async def streams(ctx):
@@ -332,10 +364,11 @@ async def streams(ctx):
     result = "```Markdown\n{}```".format('\n'.join(streamers))
     await ctx.send(result)
 
+
 @bot.command(help="Uploads a preview image of the specified stream.")
 async def preview(ctx, stream: str):
     url = 'https://api.twitch.tv/kraken/streams/{}'.format(stream)
-    r = requests.get(url, headers={'Client-ID':config.TWITCH_CLIENT_ID})
+    r = requests.get(url, headers={'Client-ID': config.TWITCH_CLIENT_ID})
     response = r.json()
     if response['stream'] is None:
         result = '{} is currently offline.'.format(stream)
@@ -348,50 +381,66 @@ async def preview(ctx, stream: str):
         embed.set_image(url="attachment://preview.jpg")
         await ctx.send(file=file, embed=embed)
 
+
 @bot.command(help='Joins voice channel')
 async def join(ctx):
-    global vc, sr_channel
-    if vc is None:
-        voice_channel = bot.get_guild(ctx.guild.id).voice_channels[0]
-        vc = await voice_channel.connect()
-    sr_channel = ctx.channel
+    if ctx.guild.id in djs:
+        dj = DJ(_voice_channel=bot.get_guild(ctx.guild.id).voice_channels[0], _request_channel=ctx.channel.id)
+        dj.connect_voice()
+        djs[ctx.guild.id] = dj
+
 
 @bot.command(help='Plays the songs in the queue.')
 async def sr(ctx, *song):
-    discord_id = ctx.message.author.id
-    if limit_requests is None or check_requests(discord_id):
-        song = ' '.join(song)
-        if 'www.youtube.com' in song:
-            title = download_song(song).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"', "'").replace('?', '')
-        else:
-            url = get_youtube_url(song)
-            title = download_song(url).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"', "'").replace('?', '')
-        path = '{}/{}.mp3'.format(config.SONG_PATH, title)
-        if is_playing:
-            queue_song(user_id=discord_id, song_path=path, title=title)
-            await ctx.send('Added {} to the queue'.format(title))
-        else:
-            await play_song(request_info=[discord_id, path, title])
+    if ctx.guild.id in djs:
+        discord_id = ctx.message.author.id
+        deej = djs.get(ctx.guild.id)
+        if deej.limit_requests is False or check_requests(discord_id, deej):
+            song = ' '.join(song)
+            if 'www.youtube.com' in song:
+                title = download_song(song).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"',
+                                                                                                           "'").replace(
+                    '?',
+                    '')
+            else:
+                url = get_youtube_url(song)
+                title = download_song(url).replace('|', '_').replace(':', ' -').replace('/', '_').replace('"',
+                                                                                                          "'").replace(
+                    '?', '')
+            path = '{}/{}.mp3'.format(config.SONG_PATH, title)
+            if deej.playing:
+                queue_song(user_id=discord_id, song_path=path, title=title, dj=deej)
+                await ctx.send('Added {} to the queue'.format(title))
+            else:
+                await play_song(request_info=[discord_id, path, title], dj=deej)
+
+    else:
+        await ctx.send("Make me join the voice channel first (!join)")
+
 
 @bot.command(help='Skips current song.')
 async def skip(ctx):
-    if vc is not None and vc.is_playing():
-        await ctx.send('Skipped {}'.format(current_song))
-        vc.stop()
+    dj = djs.get(ctx.guild.id)
+    if dj.voice_client is not None and dj.voice_client.is_playing():
+        await ctx.send('Skipped {}'.format(dj.current_song))
+        dj.voice_client.stop()
+
 
 @bot.command(help='Shows current queue')
 async def queue(ctx):
-    await ctx.send('There are currently {} songs in queue.'.format(len(song_queue)))
-    for i, entry in enumerate(song_queue):
+    q = djs.get(ctx.guild.id).queue
+    await ctx.send('There are currently {} songs in queue.'.format(len(q)))
+    for i, entry in enumerate(q):
         user = ctx.guild.get_member(entry[0]).display_name
         song = entry[2]
-        await ctx.send('#{} {} - Requested by {}'.format(i+1, song, user))
+        await ctx.send('#{} {} - Requested by {}'.format(i + 1, song, user))
+
 
 @bot.command(help='Removes your last requested song from queue.')
 async def wrongsong(ctx):
-    global song_queue
     discord_id = ctx.message.author.id
-    q = song_queue.reverse()
+    dj = djs.get(ctx.guild.id)
+    q = dj.queue.reverse()
     match = False
     matched_request = None
     for request in q:
@@ -399,10 +448,11 @@ async def wrongsong(ctx):
             match = True
             matched_request = request
             q.remove(request)
-    song_queue = q.reverse()
+    dj.queue = q.reverse()
     if matched_request is not None:
         await ctx.send('Removed {} from the queue'.format(matched_request[2]))
     else:
         await ctx.send("You didn't request any of the songs that are currently in queue")
+
 
 bot.run(config.DISCORD_TOKEN)
